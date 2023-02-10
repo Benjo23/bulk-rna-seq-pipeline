@@ -295,17 +295,21 @@ df_pca_plus<-df_pca_plus[,which(apply(df_pca_plus, 2, var)!=0)]
 df_pca_minus<- total_df[total_df$strand=="minus",]
 df_pca_minus<-df_pca_minus[,which(apply(df_pca_minus, 2, var)!=0)]
 ```
+```{r}
+rownames(df_pca_minus)<-minus_updated$Sample
+rownames(df_pca_plus)<-plus_updated$Sample
+```
 
 
 ```{r}
-df_pca_minus[,1:47822]<-log(df_pca_minus[,1:47822]+0.1)
-df_pca_plus[,1:44778]<-log(df_pca_plus[,1:44778]+0.1)
+# df_pca_minus[,1:47822]<-log(df_pca_minus[,1:47822]+0.1)
+# df_pca_plus[,1:44778]<-log(df_pca_plus[,1:44778]+0.1)
 # plus.pca<-pca(df_pca_plus[,1:42339], center = TRUE, scale =TRUE)
 # minus.pca<-pca(df_pca_minus[,1:44883], center = TRUE, scale =TRUE)
 
 
-write.table(df_pca_minus,"df_pca_minus_log.csv",row.names = FALSE,sep=",")
-write.table(df_pca_plus,"df_pca_plus_log.csv",row.names = FALSE,sep=",")
+write.table(df_pca_minus,"df_pca_minus.csv",row.names = TRUE,sep=",")
+write.table(df_pca_plus,"df_pca_plus.csv",row.names = TRUE,sep=",")
 
 #SAVED
 # ##
@@ -315,22 +319,26 @@ write.table(df_pca_plus,"df_pca_plus_log.csv",row.names = FALSE,sep=",")
 
 
 ```{r}
-df_pca_minus_log<-read.csv("df_pca_minus_log.csv",header = TRUE)
-df_pca_plus_log<-read.csv("df_pca_plus_log.csv",header = TRUE)
+df_pca_minus<-read.csv("df_pca_minus.csv",header = TRUE)
+df_pca_plus<-read.csv("df_pca_plus.csv",header = TRUE)
 
-plus.pca<-pca(df_pca_plus_log[,1:44778], center = TRUE, scale =FALSE)
+log_offset <- 0.0001
+df_pca_minus_log<-log10(df_pca_minus[,1:47822]+log_offset)
+df_pca_plus_log<-log10(df_pca_plus[,1:44778]+log_offset)
+
+plus.pca<-pca(df_pca_plus_log, center = TRUE, scale =FALSE)
 # plus.pca.scaled<-pca(df_pca_plus_log[,1:42339], center = TRUE, scale =TRUE)
-minus.pca<-pca(df_pca_minus_log[,1:47822], center = TRUE, scale =FALSE)
+minus.pca<-pca(df_pca_minus_log, center = TRUE, scale =FALSE)
 # minus.pca.scaled<-pca(df_pca_minus_log[,1:44883], center = TRUE, scale =TRUE)
 
 plus.pca.plot<- 
   Scatter_Density(object = plus.pca, 
-                  batch = df_pca_plus_log$batch, 
+                  batch = df_pca_plus$batch, 
                   title = 'Poly-A plus strand data PCA plot', 
                   batch.legend.title = 'batch')
 minus.pca.plot<- 
   Scatter_Density(object = minus.pca, 
-                  batch = df_pca_minus_log$batch, 
+                  batch = df_pca_minus$batch, 
                   title = 'Poly-A minus strand data PCA plot', 
                   batch.legend.title = 'batch')
 
@@ -369,15 +377,17 @@ plus_outliers_df<-plus_updated[plus.outliers,]
 
 ```{r}
 #Updated PCA
-df_pca_minus_updated<-df_pca_minus_log[-as.numeric(minus.outliers),]
-df_pca_plus_updated<-df_pca_plus_log[-as.numeric(plus.outliers),]
+df_pca_minus_updated<-df_pca_minus[-as.numeric(minus.outliers),]
+df_pca_plus_updated<-df_pca_plus[-as.numeric(plus.outliers),]
+df_pca_minus_updated_log<-df_pca_minus_log[-as.numeric(minus.outliers),]
+df_pca_plus_updated_log<-df_pca_plus_log[-as.numeric(plus.outliers),]
 ```
 
 
 ```{r}
-plus.pca_updated<-pca(df_pca_plus_updated[,1:44778], center = TRUE, scale =FALSE)
+plus.pca_updated<-pca(df_pca_plus_updated_log, center = TRUE, scale =FALSE)
 
-minus.pca_updated<-pca(df_pca_minus_updated[,1:47822], center = TRUE, scale =FALSE)
+minus.pca_updated<-pca(df_pca_minus_updated_log, center = TRUE, scale =FALSE)
 
 plus.pca.plot_updated<- 
   Scatter_Density(object = plus.pca_updated, 
@@ -403,14 +413,16 @@ Outlier detection by the Mahalanobis distances of PC1 and PC2. Also plot PC1 and
 #install.packages('mt')
 library('mt')
 ```
+
 ```{r}
-x<-pca.outlier(df_pca_minus_log[,1:47822], center = TRUE, scale =FALSE, conf.level = 0.975) 
-x
+x<-pca.outlier(df_pca_minus_log, center = TRUE, scale =FALSE, conf.level = 0.975) 
+x$outlier
+x$plot
 #Comment: Looks nice, actually got 2 more outliers than the 2 sd away and finding overlaps. Could be a handy way to identify outliers
 ```
 ```{r}
-p<-pca.outlier(df_pca_plus_log[,1:44778], center = TRUE, scale =FALSE, conf.level = 0.975) 
-p
+p<-pca.outlier(df_pca_plus_log, center = TRUE, scale =FALSE, conf.level = 0.975) 
+p$outlier
 ```
 #Option 3 LOF (LOCAL OUTLIER FACTOR)
 K nearest neighboghs based, seem to not really good for pca outliers detection, in this case when clearly cluster separation appeared on the plot. But can be good to find outliers in each cluster.
@@ -420,7 +432,7 @@ library('bigutilsr')
 ```
 
 ```{r}
-U3<-first_2_minus
+U3<-first_2_plus
 llof <- LOF(U3)  # log(LOF) by default
 #qplot(dist2, llof)
 cowplot::plot_grid(
@@ -431,6 +443,55 @@ cowplot::plot_grid(
 ```
 
 #option4:checking 3 statistics RLE，Hierarchical clustering，D-statistic(XQTL PIPELINE)
+```{r}
+    # Load packages
+    library(dplyr)
+    library(readr)
+    library(tibble)
+    library(purrr)
+    ## Setting inputs
+    low_expr_TPM <- 0.1
+    low_expr_TPM_percent <- 0.2
+    ## QC
+    ### Data integrity check. The input file should has sample ID as column name; the first column is gene ID
+    TPM_data<-transpose(df_pca_minus[,1:47822])
+    rownames(TPM_data)<-colnames(df_pca_minus_log)
+    colnames(TPM_data)<-rownames(df_pca_minus)
+    ##################################################
+    #Check if duplication, but seems over complicated    
+    TPM_data$feature<-rownames(TPM_data)
+    TPM_data<-TPM_data %>%relocate(feature)
+    if( sum(duplicated(TPM_data$feature)) > 0){
+      message("feature (e.g. gene names) should be in the first column. Please remove duplicated feature IDs, Exit!")
+      quit(save = "no", status = 1, runLast = FALSE)
+    }else{
+      rownames(TPM_data) <- TPM_data$feature
+      TPM_data = TPM_data[,-1]
+      loaded_sample_count <- ncol(TPM_data)
+    }
+    ####################################################
+    #### NA check
+    if(sum(is.na(TPM_data)) > 0 ){      
+      message(paste0("NA is not allowed in the data, there are ",sum(is.na(TPM_data))," NAs, Exit!"))
+      quit(save = "no", status = 1, runLast = FALSE)}
+    # #### make sure every expr column is in numeric type
+    # matrix_check <- map(TPM_data, is.numeric) %>% unlist
+    # if(sum(!matrix_check) > 0){
+    #   message("The following column(s) in expression matrix is/are NOT in numeric type. Plese check, Proceed by excluding those samples")
+    #   message(paste(names(matrix_check)[!matrix_check], collapse = "; "))
+    #   TPM_data = TPM_data[,matrix_check]
+    # }
+    # message("Gene expression profiles loaded successfully!")
+    # message(paste(nrow(TPM_data), "genes and", ncol(TPM_data), "samples are loaded from", $[_input:r], sep = " "))
+    
+    #### Filter out low exp genes
+    keep_genes_idx <- (rowMeans(TPM_data>low_expr_TPM)>low_expr_TPM_percent) 
+    TPM_data = TPM_data[keep_genes_idx,]
+    message(paste(sum(1 - keep_genes_idx), "genes are filtered by filter: >", low_expr_TPM_percent*100, "% samples have expression values <", low_expr_TPM))
+    message(paste(sum(keep_genes_idx), "genes left, saving output to $[_output]."))
+    TPM_data%>%as_tibble(rownames = "gene_ID")%>%write_delim("$[_output]","\t")
+```
+
 ```{r}
 library(RColorBrewer)
     library(ape)
@@ -459,9 +520,9 @@ library(RColorBrewer)
         }
           
     ## laod Data
-    TPM_data <- transpose(df_pca_minus_log[,1:47822])
-    rownames(TPM_data) <- colnames(df_pca_minus_log[,1:47822])
-    #TPM_data = TPM_data[,-1]
+    # TPM_data <- read_tsv('/restricted/projectnb/casa/skandoi/bulk_qc/fastq.rnaseqc.low_expression_filtered.tpm.gct.gz', col_names = TRUE, comment = "#")%>%as.data.frame()
+    # rownames(TPM_data) <- TPM_data$gene_ID
+    # TPM_data = TPM_data[,-1]
     RLEFilterLength <- RLEFilterPercent*ncol(TPM_data)
     DSFilter <- DSFilterPercent*ncol(TPM_data)
 ```
@@ -472,12 +533,11 @@ library(RColorBrewer)
   
     ### RLE
     # https://github.com/stormlovetao/eQTLQC/blob/86dcc388c8da7f1bd5b223f4b9b26f09c907eb15/Sample/src/report.Rmd#L71
-    #log_offset <- 0.0001
-    #logtpm = log10(TPM_data%>%as.matrix + log_offset)
-    logtpm<-TPM_data
+    log_offset <- 0.0001
+    logtpm = log10(TPM_data%>%as.matrix + log_offset)
     rle=logtpm-apply(logtpm, 1, median) # change "/" to "-" so that we got log(fold-change) which centered on 0 on the RLE plot.
     iqr = apply(rle,2,IQR)
-    rle=melt( rle , variable.name = "Sample",value.name ="TPM", id="feature")
+    rle=melt( rle, variable.name = "Sample",value.name ="TPM", id="ID")
     names(rle) <- c("feature","Sample","TPM")
     rle_IQR <- rle %>% group_by(Sample) %>% summarise(IQR = IQR(TPM))
     rle_IQR_range <- rle_IQR$IQR %>% range %>% abs() %>% max()
@@ -576,9 +636,9 @@ library(RColorBrewer)
     if(!length(outliersIndex) == 0){
         TPM_data <- TPM_data[,-outliersIndex]
     }
-    ## Add 2 header lines, https://github.com/getzlab/rnaseqc/blob/286f99dfd4164d33014241dd4f3149da0cddf5bf/src/RNASeQC.cpp#L426
-    cat(paste("#1.2\n#", nrow(TPM_data), ncol(TPM_data) - 2, "\n"), file=$[_output:nr], append=FALSE)
-    TPM_data%>%as_tibble(rownames = "gene_ID")%>%write_delim($[_output:nr],delim = "\t",col_names = T, append = T)
+    # ## Add 2 header lines, https://github.com/getzlab/rnaseqc/blob/286f99dfd4164d33014241dd4f3149da0cddf5bf/src/RNASeQC.cpp#L426
+    # cat(paste("#1.2\n#", nrow(TPM_data), ncol(TPM_data) - 2, "\n"), file=$[_output:nr], append=FALSE)
+    # TPM_data%>%as_tibble(rownames = "gene_ID")%>%write_delim($[_output:nr],delim = "\t",col_names = T, append = T)
 ```
 
 
