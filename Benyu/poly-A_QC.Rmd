@@ -30,7 +30,7 @@ library(PLSDAbatch)
 
 
 ```{r}
-
+#Read the sample list
 b0<-read.table('/restricted/projectnb/casa/bzhou7/batch0/listqc_unique.txt',sep='\n')
 list_sample_b0<-b0$V1
 b1<-read.table('/restricted/projectnb/casa/bzhou7/batch1/listqc_unique.txt',sep='\n')
@@ -51,15 +51,23 @@ b3$batch<-3
 b4$batch<-4
 b5$batch<-5
 
-
+#bind them together into a total df include all the samples
 total<-rbind(b1,b2,b3,b4,b5,b0)
 
-
-
+#separate in to minus and plus
 all_plus<- total%>%filter(grepl("plus", V1))
 all_plus<-all_plus%>%separate(V1, c('Sample', 'Identifier'),sep='-')
 all_minus<-total%>%filter(grepl("minus", V1))
 all_minus<-all_minus%>%separate(V1, c('Sample', 'Identifier'),sep='-')
+
+#To find those samples that are missing in plus or minus
+plus_samples<-unique(all_plus$Sample)
+minus_samples<-unique(all_minus$Sample)
+missing_plus<-minus_samples[!(minus_samples %in% plus_samples)]
+missing_minus<-plus_samples[!(plus_samples %in% minus_samples)]
+
+
+#Get rid of duplicated results identified as as not good quality in previous fastqc report
 deserted_samples<-c('1071-minus_182_011_S130', '1071-plus_007_186_S158', '1073-plus_364_213_S121',
                     '1080-plus_292_285_S105', '1113-plus_325_252_S125')
 total_updated<-total[-which(total$V1%in%deserted_samples),]
@@ -68,17 +76,6 @@ plus_updated<-plus_updated%>%separate(V1, c('Sample', 'Identifier'),sep='-')
 minus_updated<-total_updated%>%filter(grepl("minus", V1))
 minus_updated<-minus_updated%>%separate(V1, c('Sample', 'Identifier'),sep='-')
 
-plus_samples<-unique(all_plus$Sample)
-minus_samples<-unique(all_minus$Sample)
-missing_plus<-minus_samples[!(minus_samples %in% plus_samples)]
-missing_minus<-plus_samples[!(plus_samples %in% minus_samples)]
-
-ind<-which(table(all_plus$Sample)>1)
-more_than_once_plus<-table(all_plus$Sample)[ind]
-ind<-which(table(all_minus$Sample)>1)
-more_than_once_minus<-table(all_minus$Sample)[ind]
-more_than_once_plus_df<-all_plus[all_plus$Sample %in% names(more_than_once_plus),]%>%arrange(batch)
-more_than_once_minus_df<-all_minus[all_minus$Sample %in% names(more_than_once_minus),]%>%arrange(batch)
 
 list_sample_b0<-list_sample_b0[-which(list_sample_b0%in%deserted_samples)]
 list_sample_b2<-list_sample_b2[-which(list_sample_b2%in%deserted_samples)]
@@ -88,7 +85,7 @@ list_sample_b3<-list_sample_b3[-which(list_sample_b3%in%deserted_samples)]
 
 
 ```{r}
-#Using functions
+#Using functions to split strings for gene ids
 func1 <- function(x,c){
   result <- unlist(strsplit(x[c],split="_"))[1]
   return(result)
@@ -321,21 +318,71 @@ write.table(df_pca_plus,"df_pca_plus.csv",row.names = TRUE,sep=",")
 ```{r}
 df_pca_minus<-read.csv("df_pca_minus.csv",header = TRUE)
 df_pca_plus<-read.csv("df_pca_plus.csv",header = TRUE)
+```
 
+
+```{r}
+    # Load packages
+    library(dplyr)
+    library(readr)
+    library(tibble)
+    library(purrr)
+    ## Setting inputs
+    low_expr_TPM <- 0.1
+    low_expr_TPM_percent <- 0.2
+    ## QC
+    ### Data integrity check. The input file should has sample ID as column name; the first column is gene ID
+    TPM_data<-transpose(df_pca_minus[,1:47822])
+    rownames(TPM_data)<-colnames(df_pca_minus[,1:47822])
+    colnames(TPM_data)<-rownames(df_pca_minus)
+    ##################################################
+    #Check if duplication, but seems over complicated    
+    TPM_data$feature<-rownames(TPM_data)
+    TPM_data<-TPM_data %>%relocate(feature)
+    if( sum(duplicated(TPM_data$feature)) > 0){
+      message("feature (e.g. gene names) should be in the first column. Please remove duplicated feature IDs, Exit!")
+      quit(save = "no", status = 1, runLast = FALSE)
+    }else{
+      rownames(TPM_data) <- TPM_data$feature
+      TPM_data = TPM_data[,-1]
+      loaded_sample_count <- ncol(TPM_data)
+    }
+    ####################################################
+    #### NA check
+    if(sum(is.na(TPM_data)) > 0 ){      
+      message(paste0("NA is not allowed in the data, there are ",sum(is.na(TPM_data))," NAs, Exit!"))
+      quit(save = "no", status = 1, runLast = FALSE)}
+    # #### make sure every expr column is in numeric type
+    # matrix_check <- map(TPM_data, is.numeric) %>% unlist
+    # if(sum(!matrix_check) > 0){
+    #   message("The following column(s) in expression matrix is/are NOT in numeric type. Plese check, Proceed by excluding those samples")
+    #   message(paste(names(matrix_check)[!matrix_check], collapse = "; "))
+    #   TPM_data = TPM_data[,matrix_check]
+    # }
+    # message("Gene expression profiles loaded successfully!")
+    # message(paste(nrow(TPM_data), "genes and", ncol(TPM_data), "samples are loaded from", $[_input:r], sep = " "))
+    
+    #### Filter out low exp genes
+    keep_genes_idx <- (rowMeans(TPM_data>low_expr_TPM)>low_expr_TPM_percent) 
+    TPM_data = TPM_data[keep_genes_idx,]
+```
+
+```{r}
 log_offset <- 0.0001
-df_pca_minus_log<-log10(df_pca_minus[,1:47822]+log_offset)
-df_pca_plus_log<-log10(df_pca_plus[,1:44778]+log_offset)
+TPM_t<-as.data.frame(t(TPM_data))
+df_pca_minus_log<-log10(TPM_t+log_offset)
+# df_pca_plus_log<-log10(TPM_t+log_offset)
 
-plus.pca<-pca(df_pca_plus_log, center = TRUE, scale =FALSE)
-# plus.pca.scaled<-pca(df_pca_plus_log[,1:42339], center = TRUE, scale =TRUE)
+# plus.pca<-pca(df_pca_plus_log, center = TRUE, scale =FALSE)
+# # plus.pca.scaled<-pca(df_pca_plus_log[,1:42339], center = TRUE, scale =TRUE)
 minus.pca<-pca(df_pca_minus_log, center = TRUE, scale =FALSE)
 # minus.pca.scaled<-pca(df_pca_minus_log[,1:44883], center = TRUE, scale =TRUE)
 
-plus.pca.plot<- 
-  Scatter_Density(object = plus.pca, 
-                  batch = df_pca_plus$batch, 
-                  title = 'Poly-A plus strand data PCA plot', 
-                  batch.legend.title = 'batch')
+# plus.pca.plot<- 
+#   Scatter_Density(object = plus.pca, 
+#                   batch = df_pca_plus$batch, 
+#                   title = 'Poly-A plus strand data PCA plot', 
+#                   batch.legend.title = 'batch')
 minus.pca.plot<- 
   Scatter_Density(object = minus.pca, 
                   batch = df_pca_minus$batch, 
@@ -443,54 +490,7 @@ cowplot::plot_grid(
 ```
 
 #option4:checking 3 statistics RLE，Hierarchical clustering，D-statistic(XQTL PIPELINE)
-```{r}
-    # Load packages
-    library(dplyr)
-    library(readr)
-    library(tibble)
-    library(purrr)
-    ## Setting inputs
-    low_expr_TPM <- 0.1
-    low_expr_TPM_percent <- 0.2
-    ## QC
-    ### Data integrity check. The input file should has sample ID as column name; the first column is gene ID
-    TPM_data<-transpose(df_pca_minus[,1:47822])
-    rownames(TPM_data)<-colnames(df_pca_minus_log)
-    colnames(TPM_data)<-rownames(df_pca_minus)
-    ##################################################
-    #Check if duplication, but seems over complicated    
-    TPM_data$feature<-rownames(TPM_data)
-    TPM_data<-TPM_data %>%relocate(feature)
-    if( sum(duplicated(TPM_data$feature)) > 0){
-      message("feature (e.g. gene names) should be in the first column. Please remove duplicated feature IDs, Exit!")
-      quit(save = "no", status = 1, runLast = FALSE)
-    }else{
-      rownames(TPM_data) <- TPM_data$feature
-      TPM_data = TPM_data[,-1]
-      loaded_sample_count <- ncol(TPM_data)
-    }
-    ####################################################
-    #### NA check
-    if(sum(is.na(TPM_data)) > 0 ){      
-      message(paste0("NA is not allowed in the data, there are ",sum(is.na(TPM_data))," NAs, Exit!"))
-      quit(save = "no", status = 1, runLast = FALSE)}
-    # #### make sure every expr column is in numeric type
-    # matrix_check <- map(TPM_data, is.numeric) %>% unlist
-    # if(sum(!matrix_check) > 0){
-    #   message("The following column(s) in expression matrix is/are NOT in numeric type. Plese check, Proceed by excluding those samples")
-    #   message(paste(names(matrix_check)[!matrix_check], collapse = "; "))
-    #   TPM_data = TPM_data[,matrix_check]
-    # }
-    # message("Gene expression profiles loaded successfully!")
-    # message(paste(nrow(TPM_data), "genes and", ncol(TPM_data), "samples are loaded from", $[_input:r], sep = " "))
-    
-    #### Filter out low exp genes
-    keep_genes_idx <- (rowMeans(TPM_data>low_expr_TPM)>low_expr_TPM_percent) 
-    TPM_data = TPM_data[keep_genes_idx,]
-    message(paste(sum(1 - keep_genes_idx), "genes are filtered by filter: >", low_expr_TPM_percent*100, "% samples have expression values <", low_expr_TPM))
-    message(paste(sum(keep_genes_idx), "genes left, saving output to $[_output]."))
-    TPM_data%>%as_tibble(rownames = "gene_ID")%>%write_delim("$[_output]","\t")
-```
+
 
 ```{r}
 library(RColorBrewer)
@@ -565,7 +565,7 @@ library(RColorBrewer)
     plot(hcphy, type = "unrooted", cex=.2, lab4ut='axial',underscore = T, main="Sample clustering before QC (Spearman - Cor.)")
     dev.off()
     # https://github.com/stormlovetao/eQTLQC/blob/86dcc388c8da7f1bd5b223f4b9b26f09c907eb15/Sample/src/report.Rmd#L102
-    log_offset <- 1
+    log_offset <- 0.0001
     logtpm = log10(TPM_data%>%as.matrix + log_offset)
     ntop <- topk_genes
     Pvars <- apply(logtpm, 1, var)
