@@ -1,0 +1,22 @@
+#!/bin/bash -l
+#$ -S /bin/bash
+#$ -cwd
+#$ -j y
+#$ -m eas
+#$ -o nextflow.log
+#$ -N nextflow
+#$ -l h_rt=4:00:00
+#$ -l mem_free=5g
+#$ -P casa
+
+# Parse command-line argument
+config_filename="RNA_Seq.config"
+
+# Load and list modules
+module load nextflow
+module list
+
+# Note: this command expects RNA_Seq.nf to be in the current working directory
+nextflow -C "${config_filename}" \
+         run RNA_Seq.nf \
+         -with-trace -with-timeline -with-dag -resume 
