@@ -1,0 +1,2 @@
+INDIVIDUAL_ID	SAMPLE_ID	LIBRARY_ID	RG_ID	PLATFORM_UNIT	PLATFORM	PLATFORM_MODEL	RUN_DATE	CENTER	R1	R2
+  samplename                full/path/samplename_R1.fastq.gz full/path/samplename_R2.fastq.gz
