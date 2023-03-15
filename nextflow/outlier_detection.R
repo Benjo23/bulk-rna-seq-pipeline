@@ -152,10 +152,10 @@ saveRDS(SE_gene,"Gene_Expression.rds")
 SE_isoform <- readRDS(args[2])
 TPM_isoform <- SE_isoform@assays@data@listData[["TPM"]]
 
-#####Step 2: filter low-expressed genes
-keep_genes_idx <- (rowMeans(TPM_isoform>low_expr_TPM)>low_expr_TPM_percent) 
-TPM_isoform <- TPM_isoform[keep_genes_idx,]
-SE_isoform <- SE_isoform[keep_genes_idx,]
+#####Step 2: filter low-expressed isoforms
+keep_isoform_idx <- (rowMeans(TPM_isoform>low_expr_TPM)>low_expr_TPM_percent) 
+TPM_isoform <- TPM_isoform[keep_isoform_idx,]
+SE_isoform <- SE_isoform[keep_isoform_idx,]
 
 #####Step 3: detect outliers using PCA, RLE, D-statistics
 ###method 1: PCA 
@@ -227,7 +227,6 @@ message(D_filterList)
 
 #####Step 4: save result into SE
 #isoform
-SE_isoform <- SE_isoform[keep_genes_idx,]
 PCA_outliers_df<-as.data.frame(y$outlier)
 PCA_outliers_df$SAMPLE_ID<-rownames(PCA_outliers_df)
 PCA_outliers_df$PCAoutliers<-c("Yes")
