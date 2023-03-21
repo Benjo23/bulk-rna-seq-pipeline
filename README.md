@@ -6,7 +6,7 @@
 ### Steps to set up a new run 
 1. Create working directory and retrieve files from Github using this command:
 
-`git clone https://github.com/Biomedical-Genetics/bulk-rna-seq-pipeline/tree/main/nextflow`
+`git clone https://github.com/Biomedical-Genetics/bulk-rna-seq-pipeline`
 
 2. Generate params.infile in TSV format using `create_params.infile.R` and the example of TSV file can be found in `params.infile_example.tsv`.
 
