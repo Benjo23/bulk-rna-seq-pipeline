@@ -288,6 +288,7 @@ process runRSEMprepareReference {
 
   input:
   file(ensembl_gtf_file) from generateGTF_to_runRSEMprepareReference
+  file(ensembl_fasta_file) from generateFASTA_to_runRSEMprepareReference
 
   output:
   // Folder containing RSEM reference files (with prefix of same name as folder)
