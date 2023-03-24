@@ -151,6 +151,7 @@ process runSTARgenomeGenerate {
   // Method toSortedList() used to ensure task will be cached, not resubmitted
   val sjdb_files from runSTAR1pass_to_runSTARgenomeGenerate.toSortedList()
   file(ensembl_gtf_file) from generateGTF_to_runSTARgenomeGenerate
+  file(ensembl_fasta_file) from generateFASTA_to_runSTARgenomeGenerate
 
   output:
   file("${genomeDir}/Log.out") into runSTARgenomeGenerateOutput
