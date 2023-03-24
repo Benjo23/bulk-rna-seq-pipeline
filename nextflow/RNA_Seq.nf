@@ -35,7 +35,8 @@ process generateGTF {
   file(ensembl_gtf_file) \
     into (
       generateGTF_to_generateBED,
-      generateGTF_to_runSTARgenomeGenerate,
+      generateGTF_to_runSTARgenomeGenerate1,
+      generateGTF_to_runSTARgenomeGenerate2,
       generateGTF_to_runRSEMprepareReference,
       generateGTF_to_createSE
     )
@@ -89,12 +90,12 @@ process generateBED {
 process generateFASTA {
   tag "Retrieving and processing Ensembl FASTA file"
   publishDir "${params.output_dir}/Output/FASTA"
-
-
+  
   output:
   file(ensembl_fasta_file) \
     into (
-      generateFASTA_to_runSTARgenomeGenerate,
+      generateFASTA_to_runSTARgenomeGenerate1,
+      generateFASTA_to_runSTARgenomeGenerate2,
       generateFASTA_to_runRSEMprepareReference
     )
 
@@ -108,6 +109,45 @@ process generateFASTA {
 
 // First-pass STAR alignment ///////////////////////////////////////////////////
 
+process runSTARgenomeGenerate1 {
+  tag "Generating STAR genome reference"
+  publishDir "${params.output_dir}/Output/STAR"
+
+  module params.modules.star
+
+  input:
+  file(ensembl_gtf_file) from generateGTF_to_runSTARgenomeGenerate1
+  file(ensembl_fasta_file) from generateFASTA_to_runSTARgenomeGenerate1
+
+  output:
+  file("${genomeDir1}/Log.out") into runSTARgenomeGenerateOutput1
+  file("${genomeDir1}")  into runSTARgenomeGenerate1_to_runSTAR1pass
+
+  script:
+  genomeDir1="genomeGenerate1"
+  sjdbGTFfile="${ensembl_gtf_file.name.replaceFirst("\\.gz", "")}"
+  sjdbFASTAfile="${ensembl_fasta_file.name.replaceFirst("\\.gz","")}"
+ 
+  
+  """
+  module list
+
+  # Create output directory
+  mkdir ${genomeDir1}/
+  # Decompress GTF to temporary file
+  zcat ${ensembl_gtf_file} > ${sjdbGTFfile}
+  zcat ${ensembl_fasta_file} > ${sjdbFASTAfile}
+  
+  STAR \
+    --runMode genomeGenerate \
+    --genomeDir ${genomeDir1} \
+    --genomeFastaFiles ${sjdbFASTAfile} \
+    --sjdbGTFfile ${sjdbGTFfile} \
+    --sjdbOverhang ${params.read_length - 1} \
+    --runThreadN \$NSLOTS \
+  """
+}
+
 process runSTAR1pass {
   tag "Running STAR first pass on ${sampleID}"
   publishDir "${params.output_dir}/Samples/${indivID}/${sampleID}/Processing/Libraries/${libraryID}/${rgID}/STAR_1Pass"
@@ -118,10 +158,11 @@ process runSTAR1pass {
   set indivID, sampleID, libraryID, rgID, platform_unit, platform,
     platform_model, run_date, center, R1, R2 \
     from readInput_to_runSTAR1pass
+  file("${genomeDir1}")  from runSTARgenomeGenerate1_to_runSTAR1pass
 
   output:
   file("${star_outFileNamePrefix}SJ.out.tab") \
-    into runSTAR1pass_to_runSTARgenomeGenerate
+    into runSTAR1pass_to_runSTARgenomeGenerate2
 
   script:
   star_outFileNamePrefix = "${sampleID}.1pass."
@@ -130,7 +171,7 @@ process runSTAR1pass {
   module list
 
   STAR \
-    --genomeDir ${params.STAR.genomeDir} \
+    --genomeDir ${genomeDir1} \
     --readFilesIn '${R1}' '${params.paired_end ? "${R2}": ""}' \
     --runThreadN \$NSLOTS \
     --outFileNamePrefix ${star_outFileNamePrefix} \
@@ -141,7 +182,7 @@ process runSTAR1pass {
   """
 }
 
-process runSTARgenomeGenerate {
+process runSTARgenomeGenerate2 {
   tag "Generating STAR genome reference with splice junctions"
   publishDir "${params.output_dir}/Output/STAR"
 
@@ -149,16 +190,17 @@ process runSTARgenomeGenerate {
 
   input:
   // Method toSortedList() used to ensure task will be cached, not resubmitted
-  val sjdb_files from runSTAR1pass_to_runSTARgenomeGenerate.toSortedList()
-  file(ensembl_gtf_file) from generateGTF_to_runSTARgenomeGenerate
-  file(ensembl_fasta_file) from generateFASTA_to_runSTARgenomeGenerate
+  val sjdb_files from runSTAR1pass_to_runSTARgenomeGenerate2.toSortedList()
+  file(ensembl_gtf_file) from generateGTF_to_runSTARgenomeGenerate2
+  file(ensembl_fasta_file) from generateFASTA_to_runSTARgenomeGenerate2
 
   output:
-  file("${genomeDir}/Log.out") into runSTARgenomeGenerateOutput
-  file("${genomeDir}")  into runSTARgenomeGenerate_to_runSTAR2pass
+  file("${genomeDir2}/Log.out") into runSTARgenomeGenerateOutput2
+  file("${genomeDir2}")  into runSTARgenomeGenerate2_to_runSTAR2pass
+  
 
   script:
-  genomeDir="genomeGenerate"
+  genomeDir2="genomeGenerate2"
   sjdbGTFfile="${ensembl_gtf_file.name.replaceFirst("\\.gz", "")}"
   sjdbFASTAfile="${ensembl_fasta_file.name.replaceFirst("\\.gz","")}"
  
@@ -167,15 +209,15 @@ process runSTARgenomeGenerate {
   module list
 
   # Create output directory
-  mkdir ${genomeDir}/
+  mkdir ${genomeDir2}/
   # Decompress GTF to temporary file
   zcat ${ensembl_gtf_file} > ${sjdbGTFfile}
   zcat ${ensembl_fasta_file} > ${sjdbFASTAfile}
   
   STAR \
     --runMode genomeGenerate \
-    --genomeDir ${genomeDir} \
-    --genomeFastaFiles ${sjdbGFASTAfile} \
+    --genomeDir ${genomeDir2} \
+    --genomeFastaFiles ${sjdbFASTAfile} \
     --sjdbFileChrStartEnd ${sjdb_files.join(' ')} \
     --sjdbGTFfile ${sjdbGTFfile} \
     --sjdbOverhang ${params.read_length - 1} \
@@ -196,7 +238,7 @@ process runSTAR2pass {
   set indivID, sampleID, libraryID, rgID, platform_unit, platform,
     platform_model, run_date, center, R1, R2 \
     from readInput_to_runSTAR2pass
-  file(genomeDir) from runSTARgenomeGenerate_to_runSTAR2pass
+  file(genomeDir2) from runSTARgenomeGenerate2_to_runSTAR2pass
 
   output:
   // Output to MultiQC
@@ -257,7 +299,7 @@ process runSTAR2pass {
   # Perform second-pass STAR alignment
   mkdir -p ${star_output_path}/
   STAR \
-    --genomeDir ${genomeDir} \
+    --genomeDir ${genomeDir2} \
     --readFilesIn '${R1}' '${params.paired_end ? "${R2}": ""}' \
     --runThreadN \$NSLOTS \
     --outFileNamePrefix ${star_outFileNamePrefix} \
