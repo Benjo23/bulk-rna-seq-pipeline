@@ -158,7 +158,7 @@ process runSTAR1pass {
   set indivID, sampleID, libraryID, rgID, platform_unit, platform,
     platform_model, run_date, center, R1, R2 \
     from readInput_to_runSTAR1pass
-  file("${genomeDir1}")  from runSTARgenomeGenerate1_to_runSTAR1pass
+  file(genomeDir1)  from runSTARgenomeGenerate1_to_runSTAR1pass
 
   output:
   file("${star_outFileNamePrefix}SJ.out.tab") \
