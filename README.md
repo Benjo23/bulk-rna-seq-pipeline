@@ -31,6 +31,7 @@ This Nextflow pipeline contains the processes as shown as [https://github.com/co
 Note: 
 * Add `//` in front of the line to skip running the lines. 
 * Adjust the memory and time as needed in `RNA_Seq.config` file.
+* This pipeline does not include `Trimmomatic`. Please check if the adapter content using `FastQC` before using nextflow.
 
 
 ### Future direction
