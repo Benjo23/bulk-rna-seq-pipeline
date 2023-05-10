@@ -21,7 +21,9 @@ low_expr_TPM_percent <- 0.2
 
 keep_genes_idx <- (rowMeans(TPM_gene>low_expr_TPM)>low_expr_TPM_percent) 
 TPM_gene <- TPM_gene[keep_genes_idx,]
-SE_gene <- SE_gene[keep_genes_idx,]
+
+keep_genes_idx <- keep_genes_idx[1:nrow(assay(SE_gene))]
+SE_gene <- SE_gene[keep_genes_idx, ]
 
 #####Step 3: detect outliers using PCA, RLE, D-statistics
 ###method 1: PCA 
@@ -155,7 +157,9 @@ TPM_isoform <- SE_isoform@assays@data@listData[["TPM"]]
 #####Step 2: filter low-expressed isoforms
 keep_isoform_idx <- (rowMeans(TPM_isoform>low_expr_TPM)>low_expr_TPM_percent) 
 TPM_isoform <- TPM_isoform[keep_isoform_idx,]
-SE_isoform <- SE_isoform[keep_isoform_idx,]
+
+keep_isoform_idx <- keep_isoform_idx[1:nrow(assay(SE_isoform))]
+SE_isoform <- SE_isoform[keep_isoform_idx, ]
 
 #####Step 3: detect outliers using PCA, RLE, D-statistics
 ###method 1: PCA 
